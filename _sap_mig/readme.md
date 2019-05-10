@@ -2,3 +2,4 @@
 ----------------------------------------------------------------
 -- 20190510 pakoca - initialization
 -- 20190510 pakoca - non personal found corrected
+-- 20190510 pakoca - remote modify
