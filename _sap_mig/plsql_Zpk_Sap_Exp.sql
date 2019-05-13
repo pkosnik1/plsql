@@ -1,4 +1,5 @@
 set define off
+Warning: connection was lost and re-established
 CREATE OR REPLACE PACKAGE IFSAPP.ZPK_SAP_EXP IS
   -- Author  : PKOSNIK
   -- Created : 24.09.2018 08:39:47
@@ -1682,8 +1683,7 @@ CREATE OR REPLACE PACKAGE BODY IFSAPP.ZPK_SAP_EXP IS
         -- normal
         IF (o_Emp_.Emp_No = n_Emp_.Emp_No AND
            o_Emp_.Date_Of_Leaving = n_Emp_.Date_Of_Employment - 1 AND n_Emp_.Emp_No IS NOT NULL /* it is not last performing step*/
-           AND Employment_Type_Api.Decode(o_Emp_.Employment_Id) != 'ZLC' AND
-           Employment_Type_Api.Decode(n_Emp_.Employment_Id) != 'ZLC') THEN
+           AND Employment_Type_Api.Decode(o_Emp_.Employment_Id) not in ('ZLC','UCP')) THEN
           Set_Wm___(Wm_, n_Emp_.Emp_No, n_Emp_.Date_Of_Employment);
         ELSE
           -- flush data
@@ -1694,7 +1694,7 @@ CREATE OR REPLACE PACKAGE BODY IFSAPP.ZPK_SAP_EXP IS
           Wa_.Pakey_.Begda := My_Date___(Wm_.Account_Date);
           Wa_.Pakey_.Endda := My_Date___(o_Emp_.Date_Of_Leaving);
           --
-          IF Employment_Type_Api.Decode(o_Emp_.Employment_Id) = 'ZLC' THEN
+          IF Employment_Type_Api.Decode(o_Emp_.Employment_Id) in ('ZLC','UCP') THEN
             Wa_.Ps0000_.Massn := '30'; -- T529A Action Type
             Wa_.Ps0000_.Massg := NULL; -- Reason for Action
             Wa_.Ps0000_.Stat1 := 5; -- Customer-Specific Status
@@ -1718,7 +1718,7 @@ CREATE OR REPLACE PACKAGE BODY IFSAPP.ZPK_SAP_EXP IS
             Wa_.Pakey_.Endda := My_Date___(n_Emp_.Date_Of_Employment - 1);
             --
             Wa_.Ps0000_.Massn := '29'; -- T529A Action Type
-            IF Employment_Type_Api.Decode(o_Emp_.Employment_Id) = 'ZLC' THEN
+            IF Employment_Type_Api.Decode(o_Emp_.Employment_Id) in ('ZLC','UCP')  THEN
               Wa_.Ps0000_.Massg := '09'; -- reason "with the time ..."
             ELSE
               Wa_.Ps0000_.Massg := Get_Mapping(m_Leaving_Cause_Id, To_Char(o_Emp_.Leaving_Cause_Id),
@@ -1739,7 +1739,7 @@ CREATE OR REPLACE PACKAGE BODY IFSAPP.ZPK_SAP_EXP IS
                 Wa_.Pakey_.Endda := My_Date___(Database_Sys.Get_Last_Calendar_Date);
                 --
                 Wa_.Ps0000_.Massn := '29'; -- T529A Action Type
-                IF Employment_Type_Api.Decode(o_Emp_.Employment_Id) = 'ZLC' THEN
+                IF Employment_Type_Api.Decode(o_Emp_.Employment_Id) in ('ZLC','UCP') THEN
                   Wa_.Ps0000_.Massg := '09'; -- reason "with the time ..."
                 ELSE
                   Wa_.Ps0000_.Massg := Get_Mapping(m_Leaving_Cause_Id,
@@ -2081,7 +2081,7 @@ CREATE OR REPLACE PACKAGE BODY IFSAPP.ZPK_SAP_EXP IS
         -- set outer status
         Is_Outer_ := 'FALSE';
         IF Emp_Employed_Time_Api.Get_Employment_Name(c_Company_Id, Emp_Company_Rec_.Employee_Id,
-                                                     n_Rec_.Date_From) = 'ZLC' THEN
+                                                     n_Rec_.Date_From) in ('ZLC','UCP') THEN
           Is_Outer_ := 'TRUE';
         END IF;
         -- validate breaks in the months
@@ -2706,7 +2706,7 @@ CREATE OR REPLACE PACKAGE BODY IFSAPP.ZPK_SAP_EXP IS
         -- outer status
         Is_Outer_ := 'FALSE';
         IF Emp_Employed_Time_Api.Get_Employment_Name(c_Company_Id, Emp_Company_Rec_.Employee_Id,
-                                                     n_Rec_.Date_From) = 'ZLC' THEN
+                                                     n_Rec_.Date_From) in ('ZLC','UCP') THEN
           Is_Outer_ := 'TRUE';
         END IF;
         --
@@ -2911,7 +2911,7 @@ CREATE OR REPLACE PACKAGE BODY IFSAPP.ZPK_SAP_EXP IS
         -- outer status
         Is_Outer_ := 'FALSE';
         IF Emp_Employed_Time_Api.Get_Employment_Name(c_Company_Id, Emp_Company_Rec_.Employee_Id,
-                                                     n_Rec_.Date_From) = 'ZLC' THEN
+                                                     n_Rec_.Date_From) in ('ZLC','UCP') THEN
           Is_Outer_ := 'TRUE';
         END IF;
         --
