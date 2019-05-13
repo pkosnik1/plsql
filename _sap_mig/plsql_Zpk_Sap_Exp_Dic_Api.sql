@@ -707,6 +707,10 @@ CREATE OR REPLACE PACKAGE BODY IFSAPP.ZPK_SAP_EXP_DIC_API IS
         Oa_.S44 := 'DIS_LEAVE'; -- varchar2(8), -- PPL_DIS_LEAVE_FROM  DATS  8   Additional leave for disabled first date
         Oa_.S45 := 'MODEL_ID'; --  varchar2(2), --  PPL_MODEL CHAR  2 T7PLZLA_MOD Model ID for PLZLA
         Oa_.S46 := 'NOZDR'; --     varchar2(1) --  PPL_NOZDR CHAR  1   Parental leave without health insurance
+        Oa_.S47 := 'TRMCD'; -- PPL_TRMCD CHAR  3 0 Tryb rozw. stosunku pracy
+        Oa_.S48 := 'LTMCD'; -- PPL_LTMCD CHAR  3 0 Podstawa prawna - kod
+        Oa_.S49 := 'LTMTX'; -- PPL_LTMTX  CHAR  72  0 Podstawa prawna - inna
+        Oa_.S50 := 'TRMIN'; -- PPL_TRMIN  CHAR  1 0 Strona inicjatywna
       WHEN '0517' THEN
         Oa_.S24 := 'STRAS'; -- varchar2(3), --PAD_STRAS CHAR  60    Street and House Number
         Oa_.S25 := 'HSNMR'; -- varchar2(3), --PAD_HSNMR CHAR  10    House Number
@@ -2225,6 +2229,10 @@ CREATE OR REPLACE PACKAGE BODY IFSAPP.ZPK_SAP_EXP_DIC_API IS
       Oa_.S44 := Wa_.Ps0515_.Dis_Leave; --  varchar2(8), -- PPL_DIS_LEAVE_FROM  DATS  8   Additional leave for disabled first date
       Oa_.S45 := Wa_.Ps0515_.Model_Id; --   varchar2(2), --  PPL_MODEL CHAR  2 T7PLZLA_MOD Model ID for PLZLA
       Oa_.S46 := Wa_.Ps0515_.Nozdr; --      varchar2(1) --  PPL_NOZDR CHAR  1   Parental leave without health insurance
+      Oa_.S47 := Wa_.Ps0515_.Trmcd; -- PPL_TRMCD CHAR  3 0 Tryb rozw. stosunku pracy
+      Oa_.S48 := Wa_.Ps0515_.Ltmcd; -- PPL_LTMCD CHAR  3 0 Podstawa prawna - kod
+      Oa_.S49 := Wa_.Ps0515_.Ltmtx; -- PPL_LTMTX  CHAR  72  0 Podstawa prawna - inna
+      Oa_.S50 := Wa_.Ps0515_.Trmin; -- PPL_TRMIN  CHAR  1 0 Strona inicjatywna
       --
       St_(St_.Last + 1) := Oa_;
       --

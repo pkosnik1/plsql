@@ -40,6 +40,12 @@ CREATE OR REPLACE PACKAGE IFSAPP.ZPK_SAP_EXP IS
   g_Param_Contr_ CONSTANT VARCHAR2(10) := '56030';
   g_Param_Dnind_ CONSTANT VARCHAR2(10) := '56020';
   --
+  c_Time_Params_Arr Sys.Odcivarchar2list := Sys.Odcivarchar2list( --
+                                                                 '20630', '22715', '25173', '00765',
+                                                                 '00755', '00711', '00712', '00710',
+                                                                 '00700', '00480', '00470', '00240',
+                                                                 '00230');
+  --
   c_Dir           CONSTANT VARCHAR2(20) := 'TRANS';
   c_Payroll_Chunk CONSTANT NUMBER := 299999;
   c_Pay_Mode      CONSTANT NUMBER := 2;
@@ -64,7 +70,7 @@ CREATE OR REPLACE PACKAGE IFSAPP.ZPK_SAP_EXP IS
   c_Caclulated_From   NUMBER := To_Number(To_Char(c_Period_Calc_Floor, 'YYYYMM')); -- 201812;
   c_Tax_Move          VARCHAR2(5) := 'TRUE';
   --------------------------------------------------------------------------------------------------------
-  c_Emp_No     VARCHAR2(8) := '%';
+  c_Emp_No     VARCHAR2(8) := '%008138';
   c_Emp_No_Add VARCHAR2(5) := 'FALSE'; --'FALSE'; --'TRUE'; --'TRUE';
   --------------------------------------------------------------------------------------------------------
   --------------------------------------------------------------------------------------------------------
@@ -756,7 +762,11 @@ CREATE OR REPLACE PACKAGE IFSAPP.ZPK_SAP_EXP IS
     Addbr     VARCHAR2(1), -- PPL_ADDBR CHAR  1   Additional insurance title break code
     Dis_Leave VARCHAR2(8), -- PPL_DIS_LEAVE_FROM  DATS  8   Additional leave for disabled first date
     Model_Id  VARCHAR2(2), --  PPL_MODEL CHAR  2 T7PLZLA_MOD Model ID for PLZLA
-    Nozdr     VARCHAR2(1) --  PPL_NOZDR CHAR  1   Parental leave without health insurance
+    Nozdr     VARCHAR2(1), --  PPL_NOZDR CHAR  1   Parental leave without health insurance
+    Trmcd     VARCHAR2(3), -- PPL_TRMCD CHAR  3 0 Tryb rozw. stosunku pracy
+    Ltmcd     VARCHAR2(3), -- PPL_LTMCD CHAR  3 0 Podstawa prawna - kod
+    Ltmtx     VARCHAR2(72), -- PPL_LTMTX  CHAR  72  0 Podstawa prawna - inna
+    Trmin     VARCHAR2(1) -- PPL_TRMIN  CHAR  1 0 Strona inicjatywna
     );
   TYPE Ps0517 IS RECORD(
     --.INCLUDE  PS0517        HR Master Record: Infotype 0517
@@ -1672,8 +1682,8 @@ CREATE OR REPLACE PACKAGE BODY IFSAPP.ZPK_SAP_EXP IS
         -- normal
         IF (o_Emp_.Emp_No = n_Emp_.Emp_No AND
            o_Emp_.Date_Of_Leaving = n_Emp_.Date_Of_Employment - 1 AND n_Emp_.Emp_No IS NOT NULL /* it is not last performing step*/
-           AND Employment_Type_Api.Decode(o_Emp_.Employment_Id) not in ('ZLC','UCP') AND
-           Employment_Type_Api.Decode(n_Emp_.Employment_Id) not in ('ZLC','UCP')) THEN
+           AND Employment_Type_Api.Decode(o_Emp_.Employment_Id) != 'ZLC' AND
+           Employment_Type_Api.Decode(n_Emp_.Employment_Id) != 'ZLC') THEN
           Set_Wm___(Wm_, n_Emp_.Emp_No, n_Emp_.Date_Of_Employment);
         ELSE
           -- flush data
@@ -1684,7 +1694,7 @@ CREATE OR REPLACE PACKAGE BODY IFSAPP.ZPK_SAP_EXP IS
           Wa_.Pakey_.Begda := My_Date___(Wm_.Account_Date);
           Wa_.Pakey_.Endda := My_Date___(o_Emp_.Date_Of_Leaving);
           --
-          IF Employment_Type_Api.Decode(o_Emp_.Employment_Id) in ('ZLC','UCP') THEN
+          IF Employment_Type_Api.Decode(o_Emp_.Employment_Id) = 'ZLC' THEN
             Wa_.Ps0000_.Massn := '30'; -- T529A Action Type
             Wa_.Ps0000_.Massg := NULL; -- Reason for Action
             Wa_.Ps0000_.Stat1 := 5; -- Customer-Specific Status
@@ -1708,7 +1718,7 @@ CREATE OR REPLACE PACKAGE BODY IFSAPP.ZPK_SAP_EXP IS
             Wa_.Pakey_.Endda := My_Date___(n_Emp_.Date_Of_Employment - 1);
             --
             Wa_.Ps0000_.Massn := '29'; -- T529A Action Type
-            IF Employment_Type_Api.Decode(o_Emp_.Employment_Id) in ('ZLC','UCP') THEN
+            IF Employment_Type_Api.Decode(o_Emp_.Employment_Id) = 'ZLC' THEN
               Wa_.Ps0000_.Massg := '09'; -- reason "with the time ..."
             ELSE
               Wa_.Ps0000_.Massg := Get_Mapping(m_Leaving_Cause_Id, To_Char(o_Emp_.Leaving_Cause_Id),
@@ -1729,7 +1739,7 @@ CREATE OR REPLACE PACKAGE BODY IFSAPP.ZPK_SAP_EXP IS
                 Wa_.Pakey_.Endda := My_Date___(Database_Sys.Get_Last_Calendar_Date);
                 --
                 Wa_.Ps0000_.Massn := '29'; -- T529A Action Type
-                IF Employment_Type_Api.Decode(o_Emp_.Employment_Id) in ('ZLC','UCP') THEN
+                IF Employment_Type_Api.Decode(o_Emp_.Employment_Id) = 'ZLC' THEN
                   Wa_.Ps0000_.Massg := '09'; -- reason "with the time ..."
                 ELSE
                   Wa_.Ps0000_.Massg := Get_Mapping(m_Leaving_Cause_Id,
@@ -2071,7 +2081,7 @@ CREATE OR REPLACE PACKAGE BODY IFSAPP.ZPK_SAP_EXP IS
         -- set outer status
         Is_Outer_ := 'FALSE';
         IF Emp_Employed_Time_Api.Get_Employment_Name(c_Company_Id, Emp_Company_Rec_.Employee_Id,
-                                                     n_Rec_.Date_From) in ('ZLC','UCP') THEN
+                                                     n_Rec_.Date_From) = 'ZLC' THEN
           Is_Outer_ := 'TRUE';
         END IF;
         -- validate breaks in the months
@@ -2095,6 +2105,8 @@ CREATE OR REPLACE PACKAGE BODY IFSAPP.ZPK_SAP_EXP IS
       END LOOP;
       -- perform last rec for each employee
       Add_Rec_(Emp_Company_Rec_.Employee_Id, NULL, o_Rec_);
+      -- clear rec prevent use by next not initialized emp
+      o_Rec_ := NULL;
     END LOOP;
     CLOSE c_Employee_Company_;
     --
@@ -2306,7 +2318,7 @@ CREATE OR REPLACE PACKAGE BODY IFSAPP.ZPK_SAP_EXP IS
       Rec_.Date_To   := Database_Sys.Get_Last_Calendar_Date;
       --
       Rec_.S1 := My_Date___(c_Period_Start - 1); -- LABRD DATS  8   Accounted to
-      Rec_.S2 := My_Date___(c_Period_Start); -- PRRDT DATS  8   Earliest personal retroactive accounting date
+      Rec_.S2 := My_Date___(Trunc(c_Period_Start - 1, 'MONTH')); -- PRRDT DATS  8   Earliest personal retroactive accounting date
       Rec_.S3 := My_Date___(Add_Months(Trunc(c_Period_Calc, 'YEAR'), -12)); -- PKGAB DATS  8   Date as of which personal calendar must be generated
       Rec_.S4 := NULL; --My_Date___(Database_Sys.Get_Last_Calendar_Date);
       --My_Date___(Get_Emp_Last_Termination(Emp_No_)); -- ABWD1 DATS  8   End of processing 1 (run payroll for pers.no. up to)
@@ -2694,7 +2706,7 @@ CREATE OR REPLACE PACKAGE BODY IFSAPP.ZPK_SAP_EXP IS
         -- outer status
         Is_Outer_ := 'FALSE';
         IF Emp_Employed_Time_Api.Get_Employment_Name(c_Company_Id, Emp_Company_Rec_.Employee_Id,
-                                                     n_Rec_.Date_From) in ('ZLC','UCP') THEN
+                                                     n_Rec_.Date_From) = 'ZLC' THEN
           Is_Outer_ := 'TRUE';
         END IF;
         --
@@ -2717,6 +2729,8 @@ CREATE OR REPLACE PACKAGE BODY IFSAPP.ZPK_SAP_EXP IS
       END LOOP;
       -- perform last rec for each employee
       Add_Rec_(Emp_Company_Rec_.Employee_Id, NULL, o_Rec_);
+      -- clear rec prevent use by next not initialized emp
+      o_Rec_ := NULL;
     END LOOP;
     CLOSE c_Employee_Company_;
     --
@@ -2897,7 +2911,7 @@ CREATE OR REPLACE PACKAGE BODY IFSAPP.ZPK_SAP_EXP IS
         -- outer status
         Is_Outer_ := 'FALSE';
         IF Emp_Employed_Time_Api.Get_Employment_Name(c_Company_Id, Emp_Company_Rec_.Employee_Id,
-                                                     n_Rec_.Date_From) in ('ZLC','UCP') THEN
+                                                     n_Rec_.Date_From) = 'ZLC' THEN
           Is_Outer_ := 'TRUE';
         END IF;
         --
@@ -2920,6 +2934,8 @@ CREATE OR REPLACE PACKAGE BODY IFSAPP.ZPK_SAP_EXP IS
       END LOOP;
       -- perform last rec for each employee
       Add_Rec_(Emp_Company_Rec_.Employee_Id, NULL, o_Rec_);
+      -- clear rec prevent use by next not initialized emp
+      o_Rec_ := NULL;
     END LOOP;
     CLOSE c_Employee_Company_;
     --
@@ -3292,6 +3308,7 @@ CREATE OR REPLACE PACKAGE BODY IFSAPP.ZPK_SAP_EXP IS
          AND e.Employee_Id = Emmployee_Id_
          AND b.Payroll_List_Id IS NOT NULL
          AND b.Data_Deriv_Day > c_Var_Mig
+         AND b.Param_Id NOT IN (SELECT m.Column_Value FROM TABLE(c_Time_Params_Arr) m)
          AND EXISTS (SELECT 1
                 FROM Intface_Conv_List_Cols_Tab m
                WHERE m.Conv_List_Id = 'EXP_SAP'
@@ -3605,6 +3622,8 @@ CREATE OR REPLACE PACKAGE BODY IFSAPP.ZPK_SAP_EXP IS
       -- if its filled
       IF o_Rec_.Date_From IS NOT NULL THEN
         Add_Rec_(Emp_Company_Rec_.Employee_Id, NULL, o_Rec_);
+        -- clear rec prevent use by next not initialized emp
+        o_Rec_ := NULL;
       END IF;
     END LOOP;
     CLOSE c_Employee_Company_;
@@ -5233,6 +5252,8 @@ CREATE OR REPLACE PACKAGE BODY IFSAPP.ZPK_SAP_EXP IS
       END LOOP;
       -- perform last rec for each employee
       Add_Rec_(Emp_Company_Rec_.Employee_Id, NULL, o_Rec_);
+      -- clear rec prevent use by next not initialized emp
+      o_Rec_ := NULL;
     END LOOP;
     CLOSE c_Employee_Company_;
     --
@@ -5267,9 +5288,12 @@ CREATE OR REPLACE PACKAGE BODY IFSAPP.ZPK_SAP_EXP IS
                        Is_First_ BOOLEAN DEFAULT FALSE) IS
       PROCEDURE Save_ IS
       BEGIN
-        Rec_No_ := Rec_No_ + 1;
-        Wa_.Meta_.Lineno := Rec_No_;
-        It_(Nvl(It_.Last, 0) + 1) := Wa_;
+        IF Wa_.Pakey_.Begda IS NOT NULL
+           AND Wa_.Pakey_.Endda IS NOT NULL THEN
+          Rec_No_ := Rec_No_ + 1;
+          Wa_.Meta_.Lineno := Rec_No_;
+          It_(Nvl(It_.Last, 0) + 1) := Wa_;
+        END IF;
       END Save_;
     BEGIN
       IF (Is_First_) THEN
@@ -5323,6 +5347,11 @@ CREATE OR REPLACE PACKAGE BODY IFSAPP.ZPK_SAP_EXP IS
           Wa_.Ps0515_.Dis_Leave := NULL; --PPL_DIS_LEAVE_FROM  DATS  8   Additional leave for disabled first date
           Wa_.Ps0515_.Model_Id  := NULL; -- PPL_MODEL CHAR  2 T7PLZLA_MOD Model ID for PLZLA
           Wa_.Ps0515_.Nozdr     := NULL; -- PPL_NOZDR CHAR  1   Parental leave without health insurance
+          -- new zwua rule
+          Wa_.Ps0515_.Trmcd := o_Emp_.S11; -- PPL_TRMCD CHAR  3 0 Tryb rozw. stosunku pracy
+          Wa_.Ps0515_.Ltmcd := o_Emp_.S12; -- PPL_LTMCD CHAR  3 0 Podstawa prawna - kod
+          Wa_.Ps0515_.Ltmtx := o_Emp_.S13; -- PPL_LTMTX  CHAR  72  0 Podstawa prawna - inna
+          Wa_.Ps0515_.Trmin := o_Emp_.S14; -- PPL_TRMIN  CHAR  1 0 Strona inicjatywna
           --
           Save_;
           --
@@ -5413,10 +5442,20 @@ CREATE OR REPLACE PACKAGE BODY IFSAPP.ZPK_SAP_EXP IS
       Rec_.S8  := My_Date___(Emp_Ssi_Rec_.Insur_Beg_Date); -- DZUKC
       Rec_.S9  := Emp_Ssi_Rec_.Nhs_Code; -- KASACH
       Rec_.S10 := NULL; -- ADIDT Matrix of dates can to be necessary
+      --
       FOR Abs_Rec_ IN Get_Abs_ LOOP
         Rec_.S10 := Abs_Rec_.Code_; -- ADIDT Matrix of dates can to be necessary
         Rec_.S20 := Abs_Rec_.Absence_Id;
       END LOOP;
+      -- new zwua rule
+      Rec_.S11 := Company_Employee_Property_Api.Get_Property_Value(c_Company_Id, Emp_No_,
+                                                                   'ZWUA-TRYB', Rec_.Date_To); -- PPL_TRMCD CHAR  3 0 Tryb rozw. stosunku pracy
+      Rec_.S12 := Company_Employee_Property_Api.Get_Property_Value(c_Company_Id, Emp_No_, 'ZWUA-KOD',
+                                                                   Rec_.Date_To); -- PPL_LTMCD CHAR  3 0 Podstawa prawna - kod
+      Rec_.S13 := Company_Employee_Property_Api.Get_Property_Value(c_Company_Id, Emp_No_,
+                                                                   'ZWUA-INNA', Rec_.Date_To); -- PPL_LTMTX  CHAR  72  0 Podstawa prawna - inna
+      Rec_.S14 := Company_Employee_Property_Api.Get_Property_Value(c_Company_Id, Emp_No_,
+                                                                   'ZWUA-STRON', Rec_.Date_To); -- PPL_TRMIN  CHAR  1 0 Strona inicjatywna
       --
     END Fill_Rec;
   BEGIN
@@ -5464,6 +5503,8 @@ CREATE OR REPLACE PACKAGE BODY IFSAPP.ZPK_SAP_EXP IS
       -- perform last rec for each employee
       -- not clear logic
       Add_Rec_(Emp_Company_Rec_.Employee_Id, NULL, o_Rec_);
+      -- clear rec prevent use by next not initialized emp
+      o_Rec_ := NULL;
     END LOOP;
     --
     CLOSE c_Employee_Company_;
@@ -6007,11 +6048,7 @@ CREATE OR REPLACE PACKAGE BODY IFSAPP.ZPK_SAP_EXP IS
          AND e.Employee_Id = Emmployee_Id_
          AND b.Payroll_List_Id IS NOT NULL
          AND b.Data_Deriv_Day > c_Var_Mig
-         AND (b.Param_Id IN ('20630',
-                             -- dyzor
-                             '22715'
-                             -- nadgodziny
-                             ) OR b.Param_Id LIKE '00%')
+         AND b.Param_Id IN (SELECT m.Column_Value FROM TABLE(c_Time_Params_Arr) m)
        ORDER BY b.Param_Id, b.Data_Deriv_Day;
     Emp_Change_Rec_ c_Employee_Change_%ROWTYPE;
     --
@@ -6720,6 +6757,8 @@ CREATE OR REPLACE PACKAGE BODY IFSAPP.ZPK_SAP_EXP IS
       -- perform last rec for each employee
       -- not clear logic
       Add_Rec_(Emp_Company_Rec_.Employee_Id, NULL, o_Rec_);
+      -- clear rec prevent use by next not initialized emp
+      o_Rec_ := NULL;
     END LOOP;
     CLOSE c_Employee_Company_;
     --
@@ -7313,12 +7352,8 @@ CREATE OR REPLACE PACKAGE BODY IFSAPP.ZPK_SAP_EXP IS
              OR Wac_.T558c_.Lgart = '/511'
              OR Wac_.T558c_.Lgart = '/531'
              OR Wac_.T558c_.Lgart = '/115' THEN
-            IF n_Emp_.S11 = '56110' --FB - KOSZTY UZYSKANIA
-               OR n_Emp_.S11 = '56190ZZ' --FB - zaliczka na podatek pobrana - um. zlecenie
-             THEN
-              Wac_.T558c_.Anzhl := 2; -- non-personal
-            ELSE
-              Wac_.T558c_.Anzhl := 1; -- personal found
+            IF Wac_.T558c_.Betrg != '0' THEN
+              Wac_.T558c_.Anzhl := n_Emp_.S11; -- non-personal
             END IF;
           END IF;
           -- move this to as partition ....
@@ -7391,6 +7426,19 @@ CREATE OR REPLACE PACKAGE BODY IFSAPP.ZPK_SAP_EXP IS
                           Inrec_  IN c_Payroll_Arch_Emp_%ROWTYPE) IS
       Wage_Code_Info_  VARCHAR2(200);
       Validation_Date_ DATE;
+      CURSOR Lc_Indicator_(Date_ DATE) IS
+        SELECT *
+          FROM (SELECT 7
+                  FROM Hrp_Wc_Archive_Tax t
+                 WHERE t.Company_Id = c_Company_Id
+                   AND t.Emp_No = Emp_No_
+                   AND t.Wage_Code_Id IN ('56110' /*FB - KOSZTY UZYSKANIA*/, '56190ZZ')
+                   AND t.Tax_Year = To_Char(Date_, 'YYYY')
+                   AND t.Tax_Month = To_Char(Date_, 'MM')
+                UNION ALL
+                SELECT 1
+                  FROM Dual)
+         ORDER BY 1 DESC;
     BEGIN
       -- TODO ...
       --
@@ -7416,15 +7464,27 @@ CREATE OR REPLACE PACKAGE BODY IFSAPP.ZPK_SAP_EXP IS
         Rec_.S9  := My_Number___(Inrec_.T558c_Sum_); --RPBET  CURR  15(2)   Amount
         Rec_.S10 := My_Number___(Inrec_.Sum_Year_);
       END IF;
-      Rec_.S11 := Inrec_.Wage_Code_Id_;
+      -- tax split idicator
+      OPEN Lc_Indicator_(Last_Day(To_Date(Inrec_.Tax_Calc_ * 100 + 1, 'YYYYMMDD')));
+      FETCH Lc_Indicator_
+        INTO Rec_.S11;
+      CLOSE Lc_Indicator_;
+      --Rec_.S11 := Inrec_.Wage_Code_Id_;
       --
       Rec_.S20 := Inrec_.T558c_Rank_;
       --
       -- for moved period
-      IF Last_Day(Min_Date_) > Last_Day(Inrec_.Validation_Date_)
-         AND c_Tax_Move = 'TRUE' THEN
-        Validation_Date_ := Add_Months(Inrec_.Validation_Date_, 1);
-        Rec_.S6          := My_Date___(Validation_Date_);
+      -- override values
+      IF c_Tax_Move = 'TRUE' THEN
+        IF Last_Day(Min_Date_) > Last_Day(Inrec_.Validation_Date_) THEN
+          Validation_Date_ := Add_Months(Inrec_.Validation_Date_, 1);
+          Rec_.S6          := My_Date___(Validation_Date_);
+        END IF;
+        -- tax split idicator
+        OPEN Lc_Indicator_(Last_Day(Add_Months(To_Date(Inrec_.Tax_Calc_ * 100 + 1, 'YYYYMMDD'), 1)));
+        FETCH Lc_Indicator_
+          INTO Rec_.S11;
+        CLOSE Lc_Indicator_;
       END IF;
     END Fill_Rec_c_;
     --
@@ -7590,6 +7650,7 @@ CREATE OR REPLACE PACKAGE BODY IFSAPP.ZPK_SAP_EXP IS
       CLOSE c_Payroll_Arch_Emp_;
       -- perform last rec for each employee
       Add_Rec_b_(Emp_Company_Rec_.Employee_Id, NULL, o_Rec_b_);
+      o_Rec_b_ := NULL;
       -- chunk of file
       IF Rec_No_ > c_Payroll_Chunk THEN
         Rec_No_   := 0;
