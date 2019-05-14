@@ -1,9 +1,10 @@
 set define off
-Warning: connection was lost and re-established
+
 CREATE OR REPLACE PACKAGE IFSAPP.ZPK_SAP_EXP IS
   -- Author  : PKOSNIK
   -- Created : 24.09.2018 08:39:47
   -- Purpose : Export data to sap
+  -- Utility prepares set of data in sap structure 
   --
   c_Conv_Group_Out_ CONSTANT VARCHAR2(10) := 'EXP_SAP';
   c_Conv_Group_Wc_  CONSTANT VARCHAR2(10) := 'EXP_SAP_WC';
